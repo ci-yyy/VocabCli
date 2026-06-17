@@ -7,6 +7,7 @@ from pathlib import Path
 
 CONFIG_FILE = Path("data/config.json")
 HARD_WORDS_FILE = "data/hard_words.json"
+SESSION_FILE = Path("data/session.json")
 
 
 # ---------- 配置与加载 ----------
@@ -60,16 +61,40 @@ def save_json(path: str, data: list[dict]):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
+# ---------- Session 持久化 ----------
+
+def load_session() -> dict | None:
+    """读取上次退出时的 session（mode + idx），不存在返回 None。"""
+    try:
+        with open(SESSION_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+
+
+def save_session(mode: str, idx: int):
+    """保存当前进度到 session 文件（与另一种模式的进度共存）。"""
+    data = load_session() or {}
+    data[mode] = idx
+    with open(SESSION_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def clear_session():
+    """清除已恢复的 session（完成学习后调用）。"""
+    SESSION_FILE.unlink(missing_ok=True)
+
+
 def clear():
     os.system("cls" if os.name == "nt" else "clear")
 
 
 # ---------- 模式一：刷词 ----------
 
-def run_review_mode(words: list[dict]):
+def run_review_mode(words: list[dict], start_idx: int = 0):
     """刷词模式：浏览全部单词，按 s 将不会的词存入生词本。"""
     total = len(words)
-    idx = 0
+    idx = min(start_idx, total - 1) if total > 0 else 0
     show_mean = False
     hard_words = load_hard_words()
     hard_set = {w["index"] for w in hard_words}
@@ -91,6 +116,7 @@ def run_review_mode(words: list[dict]):
         key = input().strip().lower()
 
         if key == "q":
+            save_session("review", idx)
             clear()
             return
 
@@ -127,7 +153,7 @@ def run_review_mode(words: list[dict]):
 
 # ---------- 模式二：复习生词 ----------
 
-def run_hard_mode():
+def run_hard_mode(start_idx: int = 0):
     """生词模式：复习已标记的生词，按 d 移出（表示掌握了）。"""
     hard_words = load_hard_words()
 
@@ -139,7 +165,7 @@ def run_hard_mode():
         return
 
     total = len(hard_words)
-    idx = 0
+    idx = min(start_idx, total - 1) if total > 0 else 0
     show_mean = False
 
     while True:
@@ -158,6 +184,7 @@ def run_hard_mode():
         key = input().strip().lower()
 
         if key == "q":
+            save_session("hard", idx)
             clear()
             return
 
@@ -204,6 +231,9 @@ def main():
 
     words = load_word_file(word_file)
 
+    # 加载上次退出时的 session
+    session = load_session()
+
     while True:
         clear()
         hard_count = len(load_hard_words())
@@ -225,9 +255,31 @@ def main():
         choice = input("请选择 [1/2/q]: ").strip().lower()
 
         if choice == "1":
-            run_review_mode(words)
+            # 检查是否有刷词模式的进度
+            start_idx = 0
+            saved_idx = session.get("review") if session else None
+            if saved_idx is not None and 0 <= saved_idx < len(words):
+                print(f"\n📌 检测到上次退出时在刷词模式第 {saved_idx+1} 个词")
+                resume = input("是否继续上次进度？[Y/n]: ").strip().lower()
+                if resume not in ("n", "no"):
+                    start_idx = saved_idx
+            run_review_mode(words, start_idx)
+            # 重新加载 session（用户可能在模式内按 q 保存了新进度）
+            session = load_session()
         elif choice == "2":
-            run_hard_mode()
+            # 检查是否有生词模式的进度
+            start_idx = 0
+            saved_idx = session.get("hard") if session else None
+            if saved_idx is not None:
+                hard_words = load_hard_words()
+                if 0 <= saved_idx < len(hard_words):
+                    print(f"\n📌 检测到上次退出时在生词模式第 {saved_idx+1} 个词")
+                    resume = input("是否继续上次进度？[Y/n]: ").strip().lower()
+                    if resume not in ("n", "no"):
+                        start_idx = saved_idx
+            run_hard_mode(start_idx)
+            # 重新加载 session（用户可能在模式内按 q 保存了新进度）
+            session = load_session()
         elif choice == "q":
             clear()
             print("👋 再见！")
