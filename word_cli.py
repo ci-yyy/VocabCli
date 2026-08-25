@@ -64,10 +64,11 @@ def save_json(path: str, data: list[dict]):
 # ---------- Session 持久化 ----------
 
 def load_session() -> dict | None:
-    """读取上次退出时的 session（mode + idx），不存在返回 None。"""
+    """读取上次退出时的 session（mode + idx），不存在或内容损坏返回 None。"""
     try:
         with open(SESSION_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+        return data if isinstance(data, dict) else None
     except (FileNotFoundError, json.JSONDecodeError):
         return None
 
@@ -94,7 +95,15 @@ def clear():
 def run_review_mode(words: list[dict], start_idx: int = 0):
     """刷词模式：浏览全部单词，按 s 将不会的词存入生词本。"""
     total = len(words)
-    idx = min(start_idx, total - 1) if total > 0 else 0
+    if total == 0:
+        clear()
+        print("⚠️  词库为空，无法开始刷词。")
+        print()
+        print("请重新运行 python init.py 生成词库。")
+        print()
+        input("按回车返回主菜单...")
+        return
+    idx = min(start_idx, total - 1)
     show_mean = False
     hard_words = load_hard_words()
     hard_set = {w["index"] for w in hard_words}

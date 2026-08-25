@@ -17,7 +17,7 @@
 
 | 依赖 | 说明 |
 |------|------|
-| **Python 3.8+** | 在终端运行 `python3 --version` 查看版本。未安装则从 [python.org](https://python.org) 下载 |
+| **Python 3.10+** | 在终端运行 `python3 --version` 查看版本。未安装则从 [python.org](https://python.org) 下载 |
 | **PyMuPDF** | PDF 解析库，执行下方教程第二步自动安装 |
 
 ---
